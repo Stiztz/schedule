@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Horarios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+// ====== CONFIGURACIÓN DE FIREBASE ======
+// Pega aquí el objeto firebaseConfig que te da la consola de Firebase
+// (Configuración del proyecto → Tus apps → SDK setup and configuration → Config).
+// Estas claves son públicas por diseño; lo que protege los datos son las reglas de Firestore.
+window.FIREBASE_CONFIG = null;
+/* Ejemplo:
+window.FIREBASE_CONFIG = {
+  apiKey: "AIza...",
+  authDomain: "horarios-xxxxx.firebaseapp.com",
+  projectId: "horarios-xxxxx",
+  storageBucket: "horarios-xxxxx.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdef"
+};
+*/
+</script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.19/locales/es.global.min.js"></script>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#141418; --panel:#1b1b21; --panel2:#23232b; --line:#2d2d37;
+  --text:#e8e6f0; --muted:#8e8ca0; --accent:#8b5cf6; --danger:#ef4444;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+:root[data-theme="light"]{--bg:#f4f3f8;--panel:#ffffff;--panel2:#f1f0f6;--line:#dcdae6;--text:#1c1b24;--muted:#6f6d80;}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;display:flex;flex-direction:column}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+
+.topbar{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.topbar h1{font-size:16px;font-weight:600;margin:0;letter-spacing:.01em}
+.topbar .spacer{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;color:var(--text)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--danger)}
+.btn.small{padding:4px 8px;font-size:12px}
+.status{font-size:12px;color:var(--muted)}
+
+.layout{display:flex;flex:1;min-height:0}
+.sidebar{width:230px;flex:none;border-right:1px solid var(--line);background:var(--panel);padding:14px 12px;overflow:auto;display:flex;flex-direction:column;gap:18px}
+.sidebar h2{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 8px;display:flex;align-items:center;justify-content:space-between}
+.sidebar h2 button{background:none;border:0;color:var(--muted);padding:0 4px;font-size:16px;line-height:1}
+.sidebar h2 button:hover{color:var(--text)}
+.plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.prow{display:flex;align-items:center;gap:8px;padding:6px 6px;border-radius:8px;user-select:none}
+.prow:hover{background:var(--panel2)}
+.prow .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.prow .name{flex:1;background:none;border:0;text-align:left;padding:0;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow.hidden .name{color:var(--muted)}
+.prow.hidden .dot{opacity:.35}
+.eye{background:none;border:0;padding:2px;color:var(--muted);display:flex;opacity:0}
+.prow:hover .eye,.prow.hidden .eye,.prow.solo .eye{opacity:1}
+.eye svg{width:16px;height:16px}
+.eye.edit{font-size:14px;line-height:16px}
+.prow:hover .eye.edit{opacity:1}
+.prow.solo .eye{color:var(--accent)}
+.hint{font-size:12px;color:var(--muted);line-height:1.45}
+.main{flex:1;min-width:0;padding:10px 14px 14px;display:flex;flex-direction:column}
+#calendar{flex:1;min-height:0}
+
+/* FullCalendar theming */
+.fc{--fc-border-color:var(--line);--fc-page-bg-color:var(--bg);--fc-neutral-bg-color:var(--panel2);--fc-today-bg-color:rgba(139,92,246,.08);--fc-now-indicator-color:#f59e0b;--fc-button-bg-color:var(--panel2);--fc-button-border-color:var(--line);--fc-button-text-color:var(--text);--fc-button-hover-bg-color:var(--line);--fc-button-hover-border-color:var(--muted);--fc-button-active-bg-color:var(--accent);--fc-button-active-border-color:var(--accent);--fc-list-event-hover-bg-color:var(--panel2);height:100%}
+.fc .fc-toolbar-title{font-size:16px;font-weight:600}
+.fc .fc-button{border-radius:8px;padding:5px 10px;font-size:13px;text-transform:none}
+.fc .fc-button:focus{box-shadow:0 0 0 2px rgba(139,92,246,.4)}
+.fc .fc-col-header-cell-cushion,.fc .fc-timegrid-slot-label-cushion,.fc .fc-daygrid-day-number{color:var(--muted);text-decoration:none;font-size:12px}
+.fc .fc-day-today .fc-col-header-cell-cushion{color:var(--text)}
+.fc .fc-timegrid-slot{height:26px}
+.fc-event{border:1px solid rgba(0,0,0,.45);border-radius:6px;padding:0;overflow:hidden}
+.fc-timegrid-event{box-shadow:none}
+.ev{padding:3px 6px;height:100%;color:#fff;font-size:12px;line-height:1.3;display:flex;flex-direction:column;gap:1px}
+.ev .t{opacity:.85;font-size:11px}
+.ev .h{font-weight:600;display:flex;gap:4px;align-items:flex-start}
+.ev .ic{font-size:12px;line-height:1.2}
+.fc-daygrid-event .ev .ic{font-size:11px}
+.ev.imported{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 6px,transparent 6px 12px)}
+.fc-daygrid-event .ev{flex-direction:row;gap:5px;align-items:center;padding:1px 6px}
+.fc .fc-highlight{background:rgba(139,92,246,.18)}
+.fc .fc-timegrid-now-indicator-line{border-width:1px 0 0}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.overlay.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(520px,100%);max-height:calc(100% - 32px);overflow:auto;padding:18px 20px 16px;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+.modal h3{margin:0 0 14px;font-size:16px;font-weight:600}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:12px;color:var(--muted)}
+.field input[type=text],.field input[type=date],.field input[type=time],.field select,.field textarea{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;color-scheme:dark}
+:root[data-theme="light"] .field input,:root[data-theme="light"] .field select,:root[data-theme="light"] .field textarea{color-scheme:light}
+.field textarea{min-height:70px;resize:vertical}
+.row{display:flex;gap:10px}
+.row>.field{flex:1}
+.check{display:flex;align-items:center;gap:8px;font-size:13px}
+.check input{width:16px;height:16px;accent-color:var(--accent)}
+.checks{display:flex;gap:18px;margin-bottom:12px}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.actions .left{margin-right:auto}
+.fmtgrid{display:flex;flex-wrap:wrap;gap:6px}
+.fmt{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:4px 10px;font-size:12px;display:flex;gap:5px;align-items:center}
+.fmt.sel{border-color:var(--accent);background:rgba(139,92,246,.18)}
+.fmt .x{opacity:.6}
+.colorrow{display:flex;gap:8px;align-items:center}
+.colorrow input[type=color]{width:38px;height:32px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);padding:2px}
+.note{font-size:12px;color:var(--muted);margin:4px 0 10px;line-height:1.45}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:9px 14px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+.toast.show{opacity:1}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;padding:30px;line-height:1.5}
+@media (max-width:760px){
+  .layout{flex-direction:column}
+  .sidebar{width:auto;border-right:0;border-bottom:1px solid var(--line);flex-direction:row;gap:14px;padding:10px 12px;overflow-x:auto}
+  .sidebar section{flex:none;min-width:200px}
+  .hint{display:none}
+  .fc .fc-toolbar{flex-wrap:wrap;gap:6px}
+  .fc .fc-toolbar-title{font-size:14px}
+}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>Horarios</h1>
+  <span class="status" id="status"></span>
+  <span class="spacer"></span>
+  <span class="status" id="who"></span>
+  <button class="btn" id="btnLogin">Entrar con Google</button>
+  <button class="btn" id="btnLogout" style="display:none">Salir</button>
+  <button class="btn" id="btnImport">Importar de Huginn</button>
+  <button class="btn primary" id="btnNew">Nuevo evento</button>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <section>
+      <h2>Perfiles <button id="btnAddProfile" title="Agregar perfil">+</button></h2>
+      <ul class="plist" id="profiles"></ul>
+      <p class="hint">Clic en un nombre para mostrarlo u ocultarlo; puedes combinar varios. El ojo deja solo a esa persona (otra vez: todos).</p>
+    </section>
+    <section>
+      <h2>Formatos <button id="btnFormats" title="Editar formatos">✎</button></h2>
+      <div class="fmtgrid" id="fmtlist"></div>
+      <p class="hint">Los formatos son la simbología de cada evento: ⭐ Prematch, 💀 RIP, 🍽️ Salida…</p>
+    </section>
+    <section>
+      <h2>Vista</h2>
+      <label class="check"><input type="checkbox" id="chkLight"> Tema claro</label>
+      <p class="hint" id="tzhint"></p>
+    </section>
+  </aside>
+  <main class="main">
+    <div id="calendar"></div>
+  </main>
+</div>
+
+<!-- Event modal -->
+<div class="overlay" id="evModal">
+  <div class="modal">
+    <h3 id="evTitle">Nuevo evento</h3>
+    <div class="field"><label for="fTitle">Título</label><input type="text" id="fTitle" placeholder="Qué pasa"></div>
+    <div class="row">
+      <div class="field"><label for="fProfile">Perfil</label><select id="fProfile"></select></div>
+    </div>
+    <div class="field"><label>Formato</label><div class="fmtgrid" id="fFormats"></div></div>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="fAllDay"> Todo el día</label>
+      <label class="check"><input type="checkbox" id="fWeekly"> Se repite cada semana</label>
+    </div>
+    <div class="row">
+      <div class="field"><label for="fDate" id="fDateLabel">Fecha</label><input type="date" id="fDate"></div>
+      <div class="field time"><label for="fStart">Inicio</label><input type="time" id="fStart" step="900"></div>
+      <div class="field time"><label for="fEnd">Fin</label><input type="time" id="fEnd" step="900"></div>
+    </div>
+    <div class="row" id="endDateRow"><div class="field"><label for="fEndDate">Hasta (opcional, para varios días)</label><input type="date" id="fEndDate"></div></div>
+    <div class="field"><label for="fNotes">Nota (opcional)</label><textarea id="fNotes"></textarea></div>
+    <div class="actions">
+      <button class="btn danger left" id="fDelete">Eliminar</button>
+      <button class="btn" id="fCancel">Cancelar</button>
+      <button class="btn primary" id="fSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Profile modal -->
+<div class="overlay" id="pModal">
+  <div class="modal">
+    <h3 id="pTitle">Nuevo perfil</h3>
+    <div class="field"><label for="pName">Nombre</label><input type="text" id="pName" placeholder="Cómo se llama"></div>
+    <div class="field"><label>Color</label><div class="colorrow"><input type="color" id="pColor"><button class="btn small" id="pRandom">Otro color</button></div></div>
+    <div class="actions">
+      <button class="btn danger left" id="pDelete">Eliminar perfil</button>
+      <button class="btn" id="pCancel">Cancelar</button>
+      <button class="btn primary" id="pSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Formats modal -->
+<div class="overlay" id="fmModal">
+  <div class="modal">
+    <h3>Formatos</h3>
+    <p class="note">Un formato es un emoji con nombre. Los importados de Huginn se crean solos si no existen.</p>
+    <div id="fmRows"></div>
+    <div class="row" style="margin-top:10px">
+      <div class="field" style="flex:0 0 70px"><label for="fmIcon">Emoji</label><input type="text" id="fmIcon" placeholder="🍽️" maxlength="8"></div>
+      <div class="field"><label for="fmLabel">Nombre</label><input type="text" id="fmLabel" placeholder="Salida"></div>
+      <div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button class="btn" id="fmAdd">Agregar</button></div>
+    </div>
+    <div class="actions"><button class="btn" id="fmClose">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="overlay" id="imModal">
+  <div class="modal">
+    <h3>Importar de Huginn</h3>
+    <p class="note">Pega aquí el JSON de <code>/api/calendar/events</code> de Huginn (la lista de eventos o el archivo exportado por el sniffer). Los eventos se asignan al perfil elegido con su formato original. Si vuelves a importar la misma semana, los que ya existen se actualizan en vez de duplicarse.</p>
+    <div class="row">
+      <div class="field"><label for="imProfile">Asignar al perfil</label><select id="imProfile"></select></div>
+      <div class="field"><label for="imMode">Qué importar</label><select id="imMode"><option value="mine">Solo mis turnos (con asistente)</option><option value="all">Todos los eventos del JSON</option></select></div>
+    </div>
+    <div class="field"><label for="imText">JSON <button class="btn small" id="imPaste" style="margin-left:8px">Pegar del portapapeles</button></label><textarea id="imText" style="min-height:140px;font-family:ui-monospace,monospace;font-size:12px"></textarea></div>
+    <div class="actions">
+      <button class="btn" id="imCancel">Cancelar</button>
+      <button class="btn primary" id="imRun">Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="overlay" id="cfModal">
+  <div class="modal" style="width:min(380px,100%)">
+    <h3 id="cfText">¿Seguro?</h3>
+    <div class="actions"><button class="btn" id="cfNo">Cancelar</button><button class="btn danger" id="cfYes">Eliminar</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+const $ = s => document.querySelector(s);
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+$('#tzhint').textContent = 'Las horas se muestran en tu zona horaria: ' + tz + '.';
+
+// ---------- theme ----------
+const theme = { get(){ try{return localStorage.getItem('theme')||'';}catch(e){return '';} }, set(v){ try{ v?localStorage.setItem('theme',v):localStorage.removeItem('theme'); }catch(e){} } };
+function applyTheme(){ const t=theme.get(); if(t) document.documentElement.setAttribute('data-theme',t); else document.documentElement.removeAttribute('data-theme'); $('#chkLight').checked = t==='light'; }
+$('#chkLight').addEventListener('change', e=>{ theme.set(e.target.checked?'light':''); applyTheme(); });
+applyTheme();
+
+// ---------- state ----------
+let db=null, canWrite=false;
+let profiles={}, events={}, formats={};
+let hidden=new Set(), solo=null;
+try{ const h=JSON.parse(localStorage.getItem('hiddenProfiles')||'[]'); hidden=new Set(h); solo=localStorage.getItem('soloProfile')||null; }catch(e){}
+function persistVis(){ try{ localStorage.setItem('hiddenProfiles', JSON.stringify([...hidden])); if(solo) localStorage.setItem('soloProfile',solo); else localStorage.removeItem('soloProfile'); }catch(e){} }
+
+const PALETTE=['#ec4899','#8b5cf6','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6','#f97316','#a855f7','#84cc16','#06b6d4','#e11d48'];
+function randomColor(){ const used=new Set(Object.values(profiles).map(p=>p.color)); const free=PALETTE.filter(c=>!used.has(c)); const pool=free.length?free:PALETTE; return pool[Math.floor(Math.random()*pool.length)]; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2600); }
+function setStatus(s){ $('#status').textContent=s; }
+function ask(text){ return new Promise(res=>{ $('#cfText').textContent=text; $('#cfModal').classList.add('open'); const done=v=>{ $('#cfModal').classList.remove('open'); $('#cfYes').onclick=null; $('#cfNo').onclick=null; res(v); }; $('#cfYes').onclick=()=>done(true); $('#cfNo').onclick=()=>done(false); }); }
+
+// ---------- helpers: dates ----------
+const pad=n=>String(n).padStart(2,'0');
+function localDateStr(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function localTimeStr(d){ return pad(d.getHours())+':'+pad(d.getMinutes()); }
+function fromLocal(dateStr,timeStr){ const [y,m,dd]=dateStr.split('-').map(Number); const [hh,mm]=(timeStr||'00:00').split(':').map(Number); return new Date(y,m-1,dd,hh,mm,0,0); }
+function addDays(dateStr,n){ const d=fromLocal(dateStr,'00:00'); d.setDate(d.getDate()+n); return localDateStr(d); }
+function dateInZone(iso,zone){ const d=new Date(iso); const p=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d); const o={}; p.forEach(x=>o[x.type]=x.value); return o.year+'-'+o.month+'-'+o.day; }
+
+// ---------- rendering: sidebar ----------
+const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYEOFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.5 10.5 0 0 1 12 19C5.5 19 2 12 2 12a18.5 18.5 0 0 1 5.1-5.9M9.9 4.2A9.7 9.7 0 0 1 12 4c6.5 0 10 7 10 7a18.3 18.3 0 0 1-2.2 3.2"/><path d="m1 1 22 22"/><path d="M14.1 14.1a3 3 0 1 1-4.2-4.2"/></svg>';
+function isVisible(pid){ if(solo) return solo===pid; return !hidden.has(pid); }
+function sortedProfiles(){ return Object.values(profiles).sort((a,b)=>(a.order??0)-(b.order??0)||a.name.localeCompare(b.name)); }
+function renderProfiles(){
+  const ul=$('#profiles'); ul.innerHTML='';
+  const list=sortedProfiles();
+  if(!list.length){ ul.innerHTML=db?'<li class="hint">Aún no hay perfiles. Agrega el primero con +.</li>':'<li class="hint">Inicia sesión para ver los perfiles.</li>'; }
+  list.forEach(p=>{
+    const li=document.createElement('li'); li.className='prow'+(isVisible(p.id)?'':' hidden')+(solo===p.id?' solo':'');
+    li.innerHTML=`<span class="dot" style="background:${p.color}"></span><button class="name" title="Mostrar u ocultar a ${p.name}"></button><button class="eye edit" title="Editar perfil">✎</button><button class="eye" title="Ver solo a esta persona">${isVisible(p.id)?EYE:EYEOFF}</button>`;
+    li.querySelector('.name').textContent=p.name;
+    li.querySelector('.name').addEventListener('click',()=>{ // toggle this one, keep the others as they are
+      if(solo){ const keep=solo; solo=null; hidden=new Set(Object.keys(profiles).filter(id=>id!==keep)); }
+      if(hidden.has(p.id)) hidden.delete(p.id); else hidden.add(p.id);
+      persistVis(); renderProfiles(); calendar.refetchEvents(); });
+    li.querySelector('.edit').addEventListener('click',e=>{ e.stopPropagation(); openProfile(p.id); });
+    li.querySelector('.eye').addEventListener('click',e=>{ e.stopPropagation(); // solo: only this one; again: show all
+      if(solo===p.id){ solo=null; hidden=new Set(); } else { solo=p.id; }
+      persistVis(); renderProfiles(); calendar.refetchEvents(); });
+    ul.appendChild(li);
+  });
+}
+function sortedFormats(){ return Object.values(formats).sort((a,b)=>(a.order??0)-(b.order??0)||a.label.localeCompare(b.label)); }
+function renderFormats(){
+  const box=$('#fmtlist'); box.innerHTML='';
+  sortedFormats().forEach(f=>{ const s=document.createElement('span'); s.className='fmt'; s.innerHTML=`<span>${f.icon}</span><span></span>`; s.lastChild.textContent=f.label; box.appendChild(s); });
+}
+
+// ---------- calendar ----------
+function fcEvent(ev){
+  const p=profiles[ev.profileId]; const color=p?p.color:'#6b7280';
+  const base={ id:ev.id, title:ev.title||'(sin título)', allDay:!!ev.allDay, backgroundColor:color, borderColor:color, extendedProps:{ev} };
+  if(ev.weekly){
+    const o=Object.assign(base,{ daysOfWeek:[ev.dow], startRecur:ev.startRecur||undefined });
+    if(!ev.allDay){ o.startTime=ev.startTime; o.endTime=ev.endTime; }
+    return o;
+  }
+  base.start=ev.start; base.end=ev.end||undefined; return base;
+}
+const calendar=new FullCalendar.Calendar($('#calendar'),{
+  locale:'es', firstDay:1, initialView: window.innerWidth<760?'timeGridDay':'timeGridWeek',
+  headerToolbar:{ left:'prev,next today', center:'title', right:'timeGridDay,timeGridWeek,dayGridMonth,listWeek' },
+  buttonText:{ today:'Hoy', day:'Día', week:'Semana', month:'Mes', list:'Lista' },
+  slotDuration:'00:30:00', snapDuration:'00:15:00', slotLabelFormat:{hour:'2-digit',minute:'2-digit',hour12:false}, eventTimeFormat:{hour:'2-digit',minute:'2-digit',hour12:false},
+  nowIndicator:true, slotEventOverlap:false, eventOrder:'start,-duration,title', allDaySlot:true, allDayText:'Todo el día', scrollTime:'08:00:00', height:'100%', expandRows:true, dayMaxEvents:4,
+  editable:true, eventDurationEditable:true, selectable:true, selectMirror:true, nowIndicatorClassNames:'now',
+  events:(info,ok)=>{ ok(Object.values(events).filter(e=>isVisible(e.profileId)).map(fcEvent)); },
+  eventContent:(arg)=>{ const ev=arg.event.extendedProps.ev||{}; const f=formats[ev.formatId]; const icon=f?f.icon:''; const el=document.createElement('div'); el.className='ev'+(ev.source==='huginn'?' imported':''); const time=arg.timeText?`<div class="t">${arg.timeText}</div>`:''; el.innerHTML=`${time}${icon?`<div class="ic">${icon}</div>`:''}<div class="h"><span class="ttl"></span></div>`; el.querySelector('.ttl').textContent=arg.event.title; return {domNodes:[el]}; },
+  select:(info)=>{ openEvent(null,{start:info.start,end:info.end,allDay:info.allDay}); calendar.unselect(); },
+  eventClick:(info)=>{ openEvent(info.event.id); },
+  eventDrop:(info)=>applyMove(info),
+  eventResize:(info)=>applyMove(info),
+});
+function applyMove(info){
+  if(!canWrite){ info.revert(); toast('Solo lectura: no puedes mover eventos.'); return; }
+  const ev=Object.assign({},events[info.event.id]); if(!ev.id){ info.revert(); return; }
+  const s=info.event.start, e=info.event.end;
+  if(ev.weekly){
+    ev.dow=s.getDay(); ev.allDay=info.event.allDay;
+    if(!ev.allDay){ ev.startTime=localTimeStr(s); const end=e||new Date(s.getTime()+60*60000); ev.endTime=localTimeStr(end)==='00:00'?'24:00':localTimeStr(end); }
+  } else {
+    ev.allDay=info.event.allDay;
+    if(ev.allDay){ ev.start=localDateStr(s); ev.end=e?localDateStr(e):addDays(ev.start,1); }
+    else { ev.start=s.toISOString(); ev.end=(e||new Date(s.getTime()+60*60000)).toISOString(); }
+  }
+  saveEvent(ev).catch(err=>{ info.revert(); toast('No se pudo guardar: '+(err.message||err.code||err)); });
+}
+
+// ---------- event modal ----------
+let editingId=null, selFormat=null;
+function fillProfileSelect(sel, current){ sel.innerHTML=''; sortedProfiles().forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); }); if(current&&profiles[current]) sel.value=current; }
+function renderFormatPicker(){ const box=$('#fFormats'); box.innerHTML=''; const none=document.createElement('button'); none.type='button'; none.className='fmt'+(selFormat?'':' sel'); none.textContent='Sin formato'; none.onclick=()=>{selFormat=null;renderFormatPicker();}; box.appendChild(none);
+  sortedFormats().forEach(f=>{ const b=document.createElement('button'); b.type='button'; b.className='fmt'+(selFormat===f.id?' sel':''); b.innerHTML=`<span>${f.icon}</span><span></span>`; b.lastChild.textContent=f.label; b.onclick=()=>{selFormat=f.id;renderFormatPicker();}; box.appendChild(b); }); }
+function syncAllDayUI(){ const ad=$('#fAllDay').checked, wk=$('#fWeekly').checked; document.querySelectorAll('#evModal .field.time').forEach(el=>el.style.display=ad?'none':''); $('#endDateRow').style.display=(ad&&!wk)?'':'none'; $('#fDateLabel').textContent=wk?'Primer día (define el día de la semana)':'Fecha'; }
+$('#fAllDay').addEventListener('change',syncAllDayUI); $('#fWeekly').addEventListener('change',syncAllDayUI);
+function openEvent(id, draft){
+  if(!Object.keys(profiles).length){ toast('Primero crea un perfil (+).'); return; }
+  editingId=id; const ev=id?events[id]:null;
+  $('#evTitle').textContent=ev?'Editar evento':'Nuevo evento';
+  $('#fDelete').style.display=ev?'':'none';
+  $('#fTitle').value=ev?ev.title||'':'';
+  $('#fNotes').value=ev?ev.notes||'':'';
+  fillProfileSelect($('#fProfile'), ev?ev.profileId:(solo||sortedProfiles().find(p=>isVisible(p.id))?.id));
+  selFormat=ev?ev.formatId||null:null; renderFormatPicker();
+  let start, end, allDay=false, weekly=false;
+  if(ev){ allDay=!!ev.allDay; weekly=!!ev.weekly;
+    if(weekly){ const base=new Date(); const diff=(ev.dow-base.getDay()+7)%7; base.setDate(base.getDate()+diff); start=fromLocal(localDateStr(base), ev.startTime||'09:00'); end=fromLocal(localDateStr(base), (ev.endTime==='24:00'?'23:59':ev.endTime)||'10:00'); if(ev.startRecur) start=fromLocal(ev.startRecur, ev.startTime||'09:00'), end=fromLocal(ev.startRecur,(ev.endTime==='24:00'?'23:59':ev.endTime)||'10:00'); }
+    else if(allDay){ start=fromLocal(ev.start,'00:00'); end=ev.end?fromLocal(ev.end,'00:00'):fromLocal(addDays(ev.start,1),'00:00'); }
+    else { start=new Date(ev.start); end=ev.end?new Date(ev.end):new Date(start.getTime()+3600000); }
+  } else if(draft){ start=draft.start; end=draft.end||new Date(start.getTime()+3600000); allDay=!!draft.allDay; }
+  else { start=new Date(); start.setMinutes(0,0,0); start.setHours(start.getHours()+1); end=new Date(start.getTime()+3600000); }
+  $('#fDate').value=localDateStr(start); $('#fStart').value=localTimeStr(start); $('#fEnd').value=allDay?'':localTimeStr(end);
+  if(allDay && !weekly){ const lastDay=new Date(end.getTime()-1); $('#fEndDate').value=localDateStr(lastDay)===localDateStr(start)?'':localDateStr(lastDay); } else $('#fEndDate').value='';
+  if(!allDay && !$('#fEnd').value) $('#fEnd').value='10:00';
+  $('#fAllDay').checked=allDay; $('#fWeekly').checked=weekly; syncAllDayUI();
+  $('#evModal').classList.add('open'); setTimeout(()=>$('#fTitle').focus(),30);
+}
+$('#fCancel').onclick=()=>$('#evModal').classList.remove('open');
+$('#btnNew').onclick=()=>openEvent(null);
+$('#fSave').onclick=async()=>{
+  const title=$('#fTitle').value.trim(); if(!title){ toast('Ponle un título.'); return; }
+  const date=$('#fDate').value; if(!date){ toast('Falta la fecha.'); return; }
+  const ev=editingId?Object.assign({},events[editingId]):{ id:uid(), source:'manual', createdAt:new Date().toISOString() };
+  ev.title=title; ev.notes=$('#fNotes').value.trim(); ev.profileId=$('#fProfile').value; ev.formatId=selFormat||null;
+  ev.allDay=$('#fAllDay').checked; ev.weekly=$('#fWeekly').checked;
+  delete ev.start; delete ev.end; delete ev.dow; delete ev.startTime; delete ev.endTime; delete ev.startRecur;
+  if(ev.weekly){ ev.dow=fromLocal(date,'00:00').getDay(); ev.startRecur=date; if(!ev.allDay){ ev.startTime=$('#fStart').value||'09:00'; ev.endTime=$('#fEnd').value||'10:00'; if(ev.endTime<=ev.startTime){ toast('La hora de fin debe ser mayor que la de inicio.'); return; } } }
+  else if(ev.allDay){ ev.start=date; const ed=$('#fEndDate').value; ev.end=(ed&&ed>=date)?addDays(ed,1):addDays(date,1); }
+  else { const s=fromLocal(date,$('#fStart').value||'09:00'); let e=fromLocal(date,$('#fEnd').value||'10:00'); if(e<=s) e=new Date(s.getTime()+3600000); ev.start=s.toISOString(); ev.end=e.toISOString(); }
+  try{ await saveEvent(ev); $('#evModal').classList.remove('open'); }catch(err){ toast('No se pudo guardar: '+(err.message||err.code||err)); }
+};
+$('#fDelete').onclick=async()=>{ if(!editingId) return; if(!await ask('¿Eliminar este evento?')) return; try{ await deleteEvent(editingId); $('#evModal').classList.remove('open'); }catch(err){ toast('No se pudo eliminar: '+(err.message||err)); } };
+
+// ---------- profile modal ----------
+let editingPid=null;
+function openProfile(id){
+  editingPid=id; const p=id?profiles[id]:null;
+  $('#pTitle').textContent=p?'Editar perfil':'Nuevo perfil';
+  $('#pName').value=p?p.name:''; $('#pColor').value=p?p.color:randomColor();
+  $('#pDelete').style.display=p?'':'none';
+  $('#pModal').classList.add('open'); setTimeout(()=>$('#pName').focus(),30);
+}
+$('#btnAddProfile').onclick=()=>openProfile(null);
+$('#pRandom').onclick=()=>{ $('#pColor').value=randomColor(); };
+$('#pCancel').onclick=()=>$('#pModal').classList.remove('open');
+$('#pSave').onclick=async()=>{ const name=$('#pName').value.trim(); if(!name){ toast('Ponle un nombre.'); return; }
+  const p=editingPid?Object.assign({},profiles[editingPid]):{ id:uid(), order:Object.keys(profiles).length, createdAt:new Date().toISOString() };
+  p.name=name; p.color=$('#pColor').value;
+  try{ await write('profiles',p); $('#pModal').classList.remove('open'); }catch(err){ toast('No se pudo guardar: '+(err.message||err)); } };
+$('#pDelete').onclick=async()=>{ if(!editingPid) return; const n=Object.values(events).filter(e=>e.profileId===editingPid).length; if(!await ask(`¿Eliminar el perfil${n?` y sus ${n} eventos`:''}?`)) return;
+  try{ for(const e of Object.values(events)) if(e.profileId===editingPid) await deleteEvent(e.id); await del('profiles',editingPid); $('#pModal').classList.remove('open'); }catch(err){ toast('No se pudo eliminar: '+(err.message||err)); } };
+
+// ---------- formats modal ----------
+function renderFmRows(){ const box=$('#fmRows'); box.innerHTML=''; sortedFormats().forEach(f=>{ const r=document.createElement('div'); r.className='row'; r.style.alignItems='center'; r.style.marginBottom='6px'; r.innerHTML=`<span style="flex:0 0 34px;font-size:18px">${f.icon}</span><span style="flex:1"></span><button class="btn small danger">Quitar</button>`; r.children[1].textContent=f.label; r.querySelector('button').onclick=async()=>{ if(!await ask(`¿Quitar el formato ${f.label}?`)) return; try{ await del('formats',f.id); }catch(err){ toast('No se pudo: '+(err.message||err)); } }; box.appendChild(r); }); }
+$('#btnFormats').onclick=()=>{ renderFmRows(); $('#fmModal').classList.add('open'); };
+$('#fmClose').onclick=()=>$('#fmModal').classList.remove('open');
+$('#fmAdd').onclick=async()=>{ const icon=$('#fmIcon').value.trim(), label=$('#fmLabel').value.trim(); if(!icon||!label){ toast('Emoji y nombre.'); return; }
+  try{ await write('formats',{ id:uid(), icon, label, order:Object.keys(formats).length }); $('#fmIcon').value=''; $('#fmLabel').value=''; }catch(err){ toast('No se pudo: '+(err.message||err)); } };
+async function ensureFormat(label){ const found=Object.values(formats).find(f=>f.label.toLowerCase()===String(label).toLowerCase()); if(found) return found.id; const f={ id:uid(), icon:'❓', label:String(label), order:Object.keys(formats).length }; await write('formats',f); formats[f.id]=f; return f.id; }
+
+// ---------- import ----------
+$('#btnImport').onclick=()=>{ if(!Object.keys(profiles).length){ toast('Primero crea un perfil (+).'); return; } fillProfileSelect($('#imProfile'), solo); $('#imModal').classList.add('open'); };
+$('#imCancel').onclick=()=>$('#imModal').classList.remove('open');
+$('#imPaste').onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(!t){ toast('El portapapeles está vacío.'); return; } $('#imText').value=t; toast('Pegado. Revisa el perfil y pulsa Importar.'); }catch(e){ toast('No pude leer el portapapeles; pega con Ctrl+V.'); } };
+$('#imRun').onclick=async()=>{
+  let raw; try{ raw=JSON.parse($('#imText').value); }catch(e){ toast('Ese texto no es JSON válido.'); return; }
+  let list=[];
+  if(Array.isArray(raw)) list=raw;
+  else if(raw && Array.isArray(raw.data)) list=raw.data;
+  else if(raw && Array.isArray(raw.calls)){ raw.calls.filter(c=>String(c.url||'').includes('/api/calendar/events')&&Array.isArray(c.data)).forEach(c=>list.push(...c.data)); }
+  list=list.filter(e=>e&&e.startTime&&e.endTime);
+  if(!list.length){ toast('No encontré eventos con startTime/endTime.'); return; }
+  const mode=$('#imMode').value; if(mode==='mine') list=list.filter(e=>Array.isArray(e.attendeeIds)&&e.attendeeIds.length);
+  const pid=$('#imProfile').value; let n=0, upd=0;
+  // dedupe by external id
+  const byExt={}; Object.values(events).forEach(e=>{ if(e.externalId) byExt[e.externalId]=e; });
+  const seen=new Set();
+  for(const h of list){ const ext=String(h.id); if(seen.has(ext)) continue; seen.add(ext);
+    const ev=byExt[ext]?Object.assign({},byExt[ext]):{ id:uid(), source:'huginn', externalId:ext, createdAt:new Date().toISOString() };
+    ev.title=h.title||'Turno'; ev.profileId=pid; ev.notes=h.notes||''; ev.weekly=false; delete ev.dow; delete ev.startTime; delete ev.endTime; delete ev.startRecur;
+    ev.formatId=h.eventFormat?await ensureFormat(h.eventFormat):null;
+    if(h.allDay){ ev.allDay=true; ev.start=dateInZone(h.startTime,'Europe/Prague'); const endDay=dateInZone(new Date(new Date(h.endTime).getTime()-1000).toISOString(),'Europe/Prague'); ev.end=addDays(endDay,1); }
+    else { ev.allDay=false; ev.start=new Date(h.startTime).toISOString(); ev.end=new Date(h.endTime).toISOString(); }
+    try{ await saveEvent(ev); byExt[ext]?upd++:n++; }catch(err){ toast('Error al importar: '+(err.message||err)); return; }
+  }
+  $('#imModal').classList.remove('open'); $('#imText').value='';
+  toast(`Importados ${n} eventos${upd?`, ${upd} actualizados`:''}.`);
+};
+
+// ---------- persistence (Firebase) ----------
+let local={profiles:{},events:{},formats:{}};
+function loadLocal(){ try{ const s=JSON.parse(localStorage.getItem('horarios-local')||'null'); if(s) local=s; }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('horarios-local',JSON.stringify(local)); }catch(e){} }
+function friendly(err){ const c=err&&err.code||''; if(c.includes('permission-denied')) return 'Tu correo no está en la lista de permitidos.'; if(c.includes('unavailable')) return 'Sin conexión.'; return err&&(err.message||err.code)||String(err); }
+async function write(col,obj){ if(db){ await db.collection(col).doc(obj.id).set(obj); } else { local[col][obj.id]=obj; saveLocal(); applyLocal(); } }
+async function del(col,id){ if(db){ await db.collection(col).doc(id).delete(); } else { delete local[col][id]; saveLocal(); applyLocal(); } }
+async function saveEvent(ev){ ev.updatedAt=new Date().toISOString(); events[ev.id]=ev; calendar.refetchEvents(); try{ await write('events',ev); }catch(err){ throw new Error(friendly(err)); } }
+async function deleteEvent(id){ delete events[id]; calendar.refetchEvents(); try{ await del('events',id); }catch(err){ throw new Error(friendly(err)); } }
+function applyLocal(){ profiles=local.profiles; events=local.events; formats=local.formats; renderProfiles(); renderFormats(); calendar.refetchEvents(); }
+
+let unsubs=[];
+function subscribe(){
+  unsubs.forEach(u=>u()); unsubs=[];
+  const onErr=e=>{ console.error(e); if(String(e.code).includes('permission-denied')){ setStatus('Sin permiso: tu correo no está en la lista.'); canWrite=false; setWriteUI(); } else setStatus('Sin conexión a la base'); };
+  unsubs.push(db.collection('profiles').onSnapshot(s=>{ profiles={}; s.docs.forEach(d=>{ profiles[d.id]=Object.assign({id:d.id},d.data()); }); renderProfiles(); calendar.refetchEvents(); },onErr));
+  unsubs.push(db.collection('formats').onSnapshot(s=>{ formats={}; s.docs.forEach(d=>{ formats[d.id]=Object.assign({id:d.id},d.data()); }); renderFormats(); calendar.refetchEvents(); },onErr));
+  unsubs.push(db.collection('events').onSnapshot(s=>{ events={}; s.docs.forEach(d=>{ events[d.id]=Object.assign({id:d.id},d.data()); }); calendar.refetchEvents(); setStatus('Compartido en vivo'); },onErr));
+}
+function setWriteUI(){ document.querySelectorAll('#btnNew,#btnImport,#btnAddProfile,#btnFormats').forEach(b=>b.disabled=!canWrite); }
+
+async function seedIfEmpty(){
+  // primera vez: formatos base para que la app no arranque vacía
+  const snap=await db.collection('formats').limit(1).get(); if(!snap.empty) return;
+  const base=[['prematch','⭐','Prematch'],['rip','💀','RIP'],['vacation','🏝️','Vacation'],['unknown','❓','Unknown'],['fifa','⚽','Fifa'],['1v1','🎯','1v1'],['bo1','1️⃣','BO1'],['bo3','3️⃣','BO3'],['bo5','5️⃣','BO5'],['salida','🍽️','Salida'],['cine','📺','Cine']];
+  const batch=db.batch(); base.forEach(([id,icon,label],i)=>batch.set(db.collection('formats').doc(id),{id,icon,label,order:i})); await batch.commit();
+}
+
+function boot(){
+  calendar.render();
+  loadLocal(); applyLocal();
+  if(!window.FIREBASE_CONFIG){ setStatus('Falta configurar Firebase (modo local, solo este navegador)'); $('#btnLogin').style.display='none'; return; }
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+  const auth=firebase.auth(); const store=firebase.firestore();
+  const provider=new firebase.auth.GoogleAuthProvider();
+  $('#btnLogin').onclick=async()=>{ try{ await auth.signInWithPopup(provider); }catch(e){ if(String(e.code).includes('popup')) { try{ await auth.signInWithRedirect(provider); }catch(e2){ toast('No se pudo iniciar sesión: '+friendly(e2)); } } else toast('No se pudo iniciar sesión: '+friendly(e)); } };
+  $('#btnLogout').onclick=()=>auth.signOut();
+  auth.onAuthStateChanged(async u=>{
+    if(u){ db=store; canWrite=true; setWriteUI(); $('#who').textContent=u.email||''; $('#btnLogin').style.display='none'; $('#btnLogout').style.display='';
+      setStatus('Conectando…');
+      try{ await seedIfEmpty(); }catch(e){ /* sin permiso: lo dirá la suscripción */ }
+      subscribe();
+    } else { unsubs.forEach(f=>f()); unsubs=[]; db=null; canWrite=false; setWriteUI(); $('#who').textContent=''; $('#btnLogin').style.display=''; $('#btnLogout').style.display='none';
+      profiles={}; events={}; formats={}; renderProfiles(); renderFormats(); calendar.refetchEvents(); setStatus('Entra con Google para ver el calendario'); }
+  });
+}
+window.addEventListener('resize',()=>calendar.updateSize());
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o){ if(o.id==='cfModal'){ $('#cfNo').click(); } else o.classList.remove('open'); } }));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($('#cfModal').classList.contains('open')) $('#cfNo').click(); else document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open')); } });
+boot();
+})();
+</script>
+</body>
+</html>
